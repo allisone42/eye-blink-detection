@@ -33,6 +33,27 @@ def eye_aspect_ratio(eye):
 	# return the eye aspect ratio
 	return ear
 
+def result_to_text_file():
+	# open or create file eye_blink_results.txt
+	f = open("eye_blink_results.txt", "a+")
+
+	# add time stamp to result
+	timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%d-%m-%Y %H:%M:%S')
+
+	# write result into eye_blink_results.txt
+	f.write(timestamp + " | " + format(args["video"]) + " | number of blinks: " + format(total) 
+		+ " | ear_average: " + format(ear_average) + "\r\n\r\n")
+
+def draw_values_on_video():
+	cv2.putText(frame, "Blinks: {}".format(total), (10, 30),
+		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+	cv2.putText(frame, "EAR: {:.2f}".format(ear), (310, 30),
+		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+	cv2.putText(frame, "Treshold: {}".format(eye_ar_treshold), (310, 50),
+		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+	cv2.putText(frame, "Frames: {}".format(face_detection_frame_counter), (10, 50),
+		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-p", "--shape-predictor", required=True,
@@ -44,7 +65,7 @@ args = vars(ap.parse_args())
 # define two constants, one for the eye aspect ratio to indicate
 # blink and then a second constant for the number of consecutive
 # frames the eye must be below the threshold
-# COMES WITH 0.3 -> probably depends on distance to camera
+# COMES WITH 0.3
 eye_ar_treshold = 0.23
 # COMES WITH 3 -> 2 might be better with lower frame rate 
 EYE_AR_CONSEC_FRAMES = 2
@@ -54,7 +75,7 @@ EYE_AR_CONSEC_FRAMES = 2
 counter = 0
 total = 0
 
-# sum of ear for each frame
+# sum of ear in all frames
 ear_total = 0
 # ear_total devided by number of frames
 ear_average = 0
@@ -62,8 +83,12 @@ ear_average = 0
 ear_treshold_difference = 0.07
 # number of frames when face was detected
 face_detection_frame_counter = 0
+total_frame_counter = 0
 
-
+frame_count_array = []
+ear_array = []
+blink_count_array = []
+blink_count_ear_array = []
 
 # initialize dlib's face detector (HOG-based) and then create
 # the facial landmark predictor
@@ -100,18 +125,16 @@ while True:
 		frame = imutils.resize(frame, width=450)
 		gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 	except AttributeError:
-		# open or create file eye_blink_results.txt
-		f = open("eye_blink_results.txt", "a+")
-
-		# add time stamp to result
-		timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%d-%m-%Y %H:%M:%S')
-
-		# write result into eye_blink_results.txt
-		f.write(timestamp + " | " + format(args["video"]) + " | number of blinks: " + format(total) 
-			+ " | ear_average: " + format(ear_average) + "\r\n\r\n")
+		plt.plot(frame_count_array, ear_array)
+		plt.scatter(blink_count_array, blink_count_ear_array, color = "red", marker = "x")
+		plt.show()
+		
+		result_to_text_file()
 
 	# detect faces in the grayscale frame
 	rects = detector(gray, 0)
+
+	total_frame_counter += 1
 
 	# loop over the face detections
 	for rect in rects:
@@ -135,13 +158,8 @@ while True:
 		ear = (leftEAR + rightEAR) / 2.0
 		ear_total += ear
 
-		x = ear
-		y = face_detection_frame_counter
-
-		plt.plot(x,y)
-
-		# @TODO: only for testing
-		print(ear)
+		frame_count_array.append(face_detection_frame_counter)
+		ear_array.append(ear)
 
 		#update ear_ar_treshold every 10 frames
 		if face_detection_frame_counter % 10 == 0:
@@ -167,24 +185,12 @@ while True:
 			# frames then increment the total number of blinks
 			if counter >= EYE_AR_CONSEC_FRAMES:
 				total += 1
-
-				# @TODO: delete print after testing
-				print(total)
-
+				blink_count_array.append(face_detection_frame_counter)
+				blink_count_ear_array.append(ear)
 			# reset the eye frame counter
 			counter = 0
 
-		# draw the total number of blinks on the frame along with
-		# the computed eye aspect ratio for the frame
-		cv2.putText(frame, "Blinks: {}".format(total), (10, 30),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-		cv2.putText(frame, "EAR: {:.2f}".format(ear), (310, 30),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-		cv2.putText(frame, "Treshold: {}".format(eye_ar_treshold), (310, 50),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-
-		cv2.putText(frame, "Frames: {}".format(face_detection_frame_counter), (10, 50),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+		draw_values_on_video()
 
 	# show the frame
 	cv2.imshow("Frame", frame)
@@ -193,8 +199,6 @@ while True:
 	# if the `q` key was pressed, break from the loop
 	if key == ord("q"):
 		break
-
-plt.show()
 
 # do a bit of cleanup
 cv2.destroyAllWindows()

@@ -16,6 +16,8 @@ import datetime
 import dlib
 import cv2
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib import style
 
 def eye_aspect_ratio(eye):
 	# compute the euclidean distances between the two sets of
@@ -33,6 +35,10 @@ def eye_aspect_ratio(eye):
 	# return the eye aspect ratio
 	return ear
 
+def draw_eye_contours(eye):
+	eyeHull = cv2.convexHull(eye)
+	cv2.drawContours(frame, [eyeHull], -1, (0, 255, 0), 1)
+
 def result_to_text_file():
 	# open or create file eye_blink_results.txt
 	f = open("eye_blink_results.txt", "a+")
@@ -41,11 +47,11 @@ def result_to_text_file():
 	timestamp = datetime.datetime.fromtimestamp(time.time()).strftime('%d-%m-%Y %H:%M:%S')
 
 	# write result into eye_blink_results.txt
-	f.write(timestamp + " | " + format(args["video"]) + " | number of blinks: " + format(total) 
-		+ " | ear_average: " + format(ear_average) + "\r\n\r\n")
+	f.write(timestamp + " | " + format(args["video"]) + " | number of blinks: " + format(total_blinks) 
+		+ " | ear_average: " + format(get_ear_average()) + "\r\n\r\n")
 
 def draw_values_on_video():
-	cv2.putText(frame, "Blinks: {}".format(total), (10, 30),
+	cv2.putText(frame, "Blinks: {}".format(total_blinks), (10, 30),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 	cv2.putText(frame, "EAR: {:.2f}".format(ear), (310, 30),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
@@ -53,6 +59,9 @@ def draw_values_on_video():
 		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 	cv2.putText(frame, "Frames: {}".format(face_detection_frame_counter), (10, 50),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+def get_ear_average():
+	return ear_total/face_detection_frame_counter
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -73,12 +82,10 @@ EYE_AR_CONSEC_FRAMES = 2
 # initialize the frame counters for consecutive frames under 
 # blink treshold and the total number of blinks
 counter = 0
-total = 0
+total_blinks = 0
 
 # sum of ear in all frames
 ear_total = 0
-# ear_total devided by number of frames
-ear_average = 0
 # distance between ear_average and blink treshold
 ear_treshold_difference = 0.07
 # number of frames when face was detected
@@ -125,10 +132,10 @@ while True:
 		frame = imutils.resize(frame, width=450)
 		gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 	except AttributeError:
-		plt.plot(frame_count_array, ear_array)
-		plt.scatter(blink_count_array, blink_count_ear_array, color = "red", marker = "x")
+		#plt.plot(frame_count_array, ear_array)
+		#plt.scatter(blink_count_array, blink_count_ear_array, color = "red", marker = "x")
 		plt.show()
-		
+
 		result_to_text_file()
 
 	# detect faces in the grayscale frame
@@ -140,6 +147,7 @@ while True:
 	for rect in rects:
 		#face was detected so increase counter by 1
 		face_detection_frame_counter += 1
+		frame_count_array.append(face_detection_frame_counter)
 
 		# determine the facial landmarks for the face region, then
 		# convert the facial landmark (x, y)-coordinates to a NumPy
@@ -157,21 +165,12 @@ while True:
 		# average the eye aspect ratio together for both eyes
 		ear = (leftEAR + rightEAR) / 2.0
 		ear_total += ear
-
-		frame_count_array.append(face_detection_frame_counter)
 		ear_array.append(ear)
-
-		#update ear_ar_treshold every 10 frames
-		if face_detection_frame_counter % 10 == 0:
-			ear_average = ear_total/face_detection_frame_counter
-			eye_ar_treshold = ear_average - ear_treshold_difference
 
 		# compute the convex hull for the left and right eye, then
 		# visualize each of the eyes
-		leftEyeHull = cv2.convexHull(leftEye)
-		rightEyeHull = cv2.convexHull(rightEye)
-		cv2.drawContours(frame, [leftEyeHull], -1, (0, 255, 0), 1)
-		cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
+		draw_eye_contours(leftEye)
+		draw_eye_contours(rightEye)
 
 		# check to see if the eye aspect ratio is below the blink
 		# threshold, and if so, increment the blink frame counter
@@ -184,13 +183,21 @@ while True:
 			# if the eyes were closed for a sufficient number of
 			# frames then increment the total number of blinks
 			if counter >= EYE_AR_CONSEC_FRAMES:
-				total += 1
+				total_blinks += 1
 				blink_count_array.append(face_detection_frame_counter)
 				blink_count_ear_array.append(ear)
 			# reset the eye frame counter
 			counter = 0
 
 		draw_values_on_video()
+
+		#update ear_ar_treshold every 10 frames
+		if face_detection_frame_counter % 20 == 0:
+			eye_ar_treshold = get_ear_average() - ear_treshold_difference
+
+			plt.plot(frame_count_array, ear_array, color = "blue")
+			plt.scatter(blink_count_array, blink_count_ear_array, color = "red", marker = "x")
+			plt.pause(0.00001)
 
 	# show the frame
 	cv2.imshow("Frame", frame)

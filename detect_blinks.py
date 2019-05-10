@@ -51,13 +51,15 @@ def result_to_text_file():
 		+ " | ear_average: " + format(get_ear_average()) + "\r\n\r\n")
 
 def draw_values_on_video():
+	# view blink counter on the top left of video
 	cv2.putText(frame, "Blinks: {}".format(total_blinks), (10, 30),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+	# view current EAR on the top right of video
 	cv2.putText(frame, "EAR: {:.2f}".format(ear), (310, 30),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 	cv2.putText(frame, "Treshold: {}".format(eye_ar_treshold), (310, 50),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-	cv2.putText(frame, "Frames: {}".format(face_detection_frame_counter), (10, 50),
+	cv2.putText(frame, "Frames: {}".format(total_frame_counter), (10, 50),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
 def get_ear_average():
@@ -87,13 +89,15 @@ total_blinks = 0
 # sum of ear in all frames
 ear_total = 0
 # distance between ear_average and blink treshold
-ear_treshold_difference = 0.07
+ear_treshold_difference = 0.06
 # number of frames when face was detected
 face_detection_frame_counter = 0
+# total frames of video
 total_frame_counter = 0
-
+# all the arrays are for plotting
 frame_count_array = []
 ear_array = []
+threshold_array = []
 blink_count_array = []
 blink_count_ear_array = []
 
@@ -125,22 +129,26 @@ while True:
 		break
 
 	# grab the frame from the threaded video file stream, resize
-	# it, and convert it to grayscale
-	# channels)
+	# it, and convert it to grayscale channels)
+	# doesn't work when video finishes
 	try:
 		frame = vs.read()
 		frame = imutils.resize(frame, width=450)
 		gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 	except AttributeError:
-		#plt.plot(frame_count_array, ear_array)
-		#plt.scatter(blink_count_array, blink_count_ear_array, color = "red", marker = "x")
-		plt.show()
+
+		plt.figure(figsize=(15,8))
+		plt.scatter(blink_count_array, blink_count_ear_array, zorder = 1, color = "red", marker = "x")
+		plt.plot(frame_count_array, ear_array, color = "blue")
+		plt.plot(frame_count_array, threshold_array, color = "green")
+		plt.savefig(format(args["video"] + ".png"),figsize = (100, 40), bbox_inches = 'tight')
 
 		result_to_text_file()
 
 	# detect faces in the grayscale frame
 	rects = detector(gray, 0)
 
+	print(format(rects))
 	total_frame_counter += 1
 
 	# loop over the face detections
@@ -166,6 +174,7 @@ while True:
 		ear = (leftEAR + rightEAR) / 2.0
 		ear_total += ear
 		ear_array.append(ear)
+		threshold_array.append(eye_ar_treshold)
 
 		# compute the convex hull for the left and right eye, then
 		# visualize each of the eyes
@@ -195,9 +204,9 @@ while True:
 		if face_detection_frame_counter % 20 == 0:
 			eye_ar_treshold = get_ear_average() - ear_treshold_difference
 
-			plt.plot(frame_count_array, ear_array, color = "blue")
-			plt.scatter(blink_count_array, blink_count_ear_array, color = "red", marker = "x")
-			plt.pause(0.00001)
+			#plt.plot(frame_count_array, ear_array, color = "blue")
+			#plt.scatter(blink_count_array, blink_count_ear_array, color = "red", marker = "x")
+			#plt.pause(0.00001)
 
 	# show the frame
 	cv2.imshow("Frame", frame)

@@ -39,8 +39,35 @@ def draw_eye_contours(eye):
 	eyeHull = cv2.convexHull(eye)
 	cv2.drawContours(frame, [eyeHull], -1, (0, 255, 0), 1)
 
+def create_plot():
+	# graph that shows detection/ non detection of face
+	# plt.plot(total_frame_count_array, face_detection_array, '--', label = 'face detection')
+
+	# marking the blinks
+	blinks_label = 'blinks = ' + format(total_blinks)
+	plt.scatter(blink_frame_array, blink_count_ear_array, color = 'red', marker = 'x', label = blinks_label)
+
+	# plotting the ear along the video
+	plt.plot(total_frame_count_array, ear_array, color = "blue", label = 'EAR', linewidth=1.0)
+
+	# plotting treshold for detecting blinks
+	plt.plot(total_frame_count_array, threshold_array, color = 'green', label = 'treshold')
+
+	# draw manually detected blinks (when 'b' was pressed)
+	manual_blink_counter = len(manual_blink_detection_array)
+	plt.scatter(manual_blink_detection_array, np.zeros(manual_blink_counter), color = 'orange', 
+		marker = "o", label = 'blinks manually = ' + format(manual_blink_counter))
+
+	# add labels on axes and legend on top of the graphic
+	plt.xlabel('Frame')
+	plt.ylabel('EAR')
+	plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
+           ncol=2, mode="expand", borderaxespad=0.)
+
+	# saving the final plot as png
+	plt.savefig(format(args["video"] + ".png"),figsize = (100, 40), bbox_inches = 'tight')
+
 def result_to_text_file():
-	# open or create file eye_blink_results.txt
 	f = open("eye_blink_results.txt", "a+")
 
 	# add time stamp to result
@@ -51,19 +78,34 @@ def result_to_text_file():
 		+ " | ear_average: " + format(get_ear_average()) + "\r\n\r\n")
 
 def draw_values_on_video():
-	# view blink counter on the top left of video
+	# write blink counter on the top left of video
 	cv2.putText(frame, "Blinks: {}".format(total_blinks), (10, 30),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-	# view current EAR on the top right of video
+	# write current EAR on the top right of video
 	cv2.putText(frame, "EAR: {:.2f}".format(ear), (310, 30),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+	# write current treshold on video
 	cv2.putText(frame, "Treshold: {}".format(eye_ar_treshold), (310, 50),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+	# write total frame counter on video
 	cv2.putText(frame, "Frames: {}".format(total_frame_counter), (10, 50),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
 def get_ear_average():
 	return ear_total/face_detection_frame_counter
+
+def add_to_face_detection_plot_array(hasDetectedFace):
+	face_detection_array.append(hasDetectedFace)
+
+def get_face_detection_plot_array():
+	return face_detection_array
+
+def get_face_detection_rate():
+	face_detection_rate = (face_detection_frame_counter / total_frame_counter) * 100
+	return face_detection_rate
+
+def add_blink_on_button_press():
+	manual_blink_detection_array.append(total_frame_counter)
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -73,20 +115,15 @@ ap.add_argument("-v", "--video", type=str, default="",
 	help="path to input video file")
 args = vars(ap.parse_args())
 
-# define two constants, one for the eye aspect ratio to indicate
-# blink and then a second constant for the number of consecutive
-# frames the eye must be below the threshold
-# COMES WITH 0.3
+# treshold for detecting a blink
 eye_ar_treshold = 0.23
-# COMES WITH 3 -> 2 might be better with lower frame rate 
+# how many frames under treshold at least before counting a blink
 EYE_AR_CONSEC_FRAMES = 2
 
-# initialize the frame counters for consecutive frames under 
-# blink treshold and the total number of blinks
-counter = 0
+# consecutive frames under blink treshold and the total number of blinks
+consec_frames_counter = 0
 total_blinks = 0
 
-# sum of ear in all frames
 ear_total = 0
 # distance between ear_average and blink treshold
 ear_treshold_difference = 0.06
@@ -95,11 +132,13 @@ face_detection_frame_counter = 0
 # total frames of video
 total_frame_counter = 0
 # all the arrays are for plotting
-frame_count_array = []
+total_frame_count_array = []
 ear_array = []
 threshold_array = []
-blink_count_array = []
+blink_frame_array = []
 blink_count_ear_array = []
+face_detection_array = []
+manual_blink_detection_array = []
 
 # initialize dlib's face detector (HOG-based) and then create
 # the facial landmark predictor
@@ -114,48 +153,47 @@ predictor = dlib.shape_predictor(args["shape_predictor"])
 
 # start the video stream thread
 print("[INFO] starting video stream thread...")
-vs = FileVideoStream(args["video"]).start()
+video_stream = FileVideoStream(args["video"]).start()
 fileStream = True
-# vs = VideoStream(src=0).start()
-# vs = VideoStream(usePiCamera=True).start()
+# use if input is direct webcam
+# video_stream = VideoStream(src=0).start()
+# video_stream = VideoStream(usePiCamera=True).start()
 # fileStream = False
 time.sleep(1.0)
 
 # loop over frames from the video stream
 while True:
-	# if this is a file video stream, then we need to check if
-	# there any more frames left in the buffer to process
-	if fileStream and not vs.more():
-		break
-
-	# grab the frame from the threaded video file stream, resize
-	# it, and convert it to grayscale channels)
-	# doesn't work when video finishes
+	# grab the frame from video file stream
+	frame = video_stream.read()
 	try:
-		frame = vs.read()
+		# resize frame
 		frame = imutils.resize(frame, width=450)
+		# convert frame to grayscale
 		gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+	# finish loop over frames when video stream is finished
 	except AttributeError:
-
-		plt.figure(figsize=(15,8))
-		plt.scatter(blink_count_array, blink_count_ear_array, zorder = 1, color = "red", marker = "x")
-		plt.plot(frame_count_array, ear_array, color = "blue")
-		plt.plot(frame_count_array, threshold_array, color = "green")
-		plt.savefig(format(args["video"] + ".png"),figsize = (100, 40), bbox_inches = 'tight')
-
+		create_plot()
 		result_to_text_file()
+		break
 
 	# detect faces in the grayscale frame
 	rects = detector(gray, 0)
-
-	print(format(rects))
+	if len(rects) == 0:
+		face_detection_array.append(0)
+		ear_array.append(0)
+		threshold_array.append(0)
+	else:
+		face_detection_array.append(0.5)
+		#add_to_face_detection_plot_array(0.5)
+	#break
 	total_frame_counter += 1
+	total_frame_count_array.append(total_frame_counter)
 
 	# loop over the face detections
 	for rect in rects:
-		#face was detected so increase counter by 1
+		#face was detected so increase consec_frames_counter by 1
 		face_detection_frame_counter += 1
-		frame_count_array.append(face_detection_frame_counter)
 
 		# determine the facial landmarks for the face region, then
 		# convert the facial landmark (x, y)-coordinates to a NumPy
@@ -182,21 +220,21 @@ while True:
 		draw_eye_contours(rightEye)
 
 		# check to see if the eye aspect ratio is below the blink
-		# threshold, and if so, increment the blink frame counter
+		# threshold, and if so, increment the blink frame consec_frames_counter
 		if ear < eye_ar_treshold:
-			counter += 1
+			consec_frames_counter += 1
 
 		# otherwise, the eye aspect ratio is not below the blink
 		# threshold
 		else:
 			# if the eyes were closed for a sufficient number of
 			# frames then increment the total number of blinks
-			if counter >= EYE_AR_CONSEC_FRAMES:
+			if consec_frames_counter >= EYE_AR_CONSEC_FRAMES:
 				total_blinks += 1
-				blink_count_array.append(face_detection_frame_counter)
+				blink_frame_array.append(total_frame_counter - 1)
 				blink_count_ear_array.append(ear)
-			# reset the eye frame counter
-			counter = 0
+			# reset the eye frame consec_frames_counter
+			consec_frames_counter = 0
 
 		draw_values_on_video()
 
@@ -204,13 +242,16 @@ while True:
 		if face_detection_frame_counter % 20 == 0:
 			eye_ar_treshold = get_ear_average() - ear_treshold_difference
 
-			#plt.plot(frame_count_array, ear_array, color = "blue")
-			#plt.scatter(blink_count_array, blink_count_ear_array, color = "red", marker = "x")
+			#plt.plot(total_frame_count_array, ear_array, color = "blue")
+			#plt.scatter(blink_frame_array, blink_count_ear_array, color = "red", marker = "x")
 			#plt.pause(0.00001)
 
 	# show the frame
 	cv2.imshow("Frame", frame)
 	key = cv2.waitKey(1) & 0xFF
+
+	if key == ord("b"):
+		add_blink_on_button_press()
 
 	# if the `q` key was pressed, break from the loop
 	if key == ord("q"):
@@ -218,4 +259,4 @@ while True:
 
 # do a bit of cleanup
 cv2.destroyAllWindows()
-vs.stop()
+video_stream.stop()

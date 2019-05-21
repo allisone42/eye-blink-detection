@@ -40,32 +40,47 @@ def draw_eye_contours(eye):
 	cv2.drawContours(frame, [eyeHull], -1, (0, 255, 0), 1)
 
 def create_plot():
-	# graph that shows detection/ non detection of face
-	# plt.plot(total_frame_count_array, face_detection_array, '--', label = 'face detection')
+	# set size of resulting graphic
+	plt.figure(figsize = (20, 5))
 
-	# marking the blinks
+	#add_face_detection_plot()
+	add_ear_plot()
+	add_treshold_plot()
+	add_auto_blink_detection_scatter_plot()
+	add_manual_blink_detection_scatter_plot()
+	add_labels_and_legend()
+	
+	# saving the final plot as png
+	plt.savefig(format(args["video"] + ".png"), bbox_inches = 'tight')
+
+def add_face_detection_plot():
+	plt.plot(total_frame_count_array, face_detection_array, '--',
+		label = 'face detection')
+
+def add_ear_plot():
+	plt.plot(total_frame_count_array, ear_array, 
+		color = "blue", label = 'EAR', linewidth=1.0)
+
+def add_treshold_plot():
+	plt.plot(total_frame_count_array, threshold_array, 
+		color = 'green', label = 'treshold', linewidth=1.0)
+
+def add_auto_blink_detection_scatter_plot():
 	blinks_label = 'blinks = ' + format(total_blinks)
-	plt.scatter(blink_frame_array, blink_count_ear_array, color = 'red', marker = 'x', label = blinks_label)
+	plt.scatter(blink_frame_array, blink_count_ear_array, 
+		color = 'red', marker = 'x', label = blinks_label)
 
-	# plotting the ear along the video
-	plt.plot(total_frame_count_array, ear_array, color = "blue", label = 'EAR', linewidth=1.0)
-
-	# plotting treshold for detecting blinks
-	plt.plot(total_frame_count_array, threshold_array, color = 'green', label = 'treshold')
-
-	# draw manually detected blinks (when 'b' was pressed)
+def add_manual_blink_detection_scatter_plot():
+	# manually detected blinks (when 'b' was pressed)
 	manual_blink_counter = len(manual_blink_detection_array)
 	plt.scatter(manual_blink_detection_array, np.zeros(manual_blink_counter), color = 'orange', 
-		marker = "o", label = 'blinks manually = ' + format(manual_blink_counter))
+		marker = 'o', label = 'blinks manually = ' + format(manual_blink_counter))
 
-	# add labels on axes and legend on top of the graphic
-	plt.xlabel('Frame')
-	plt.ylabel('EAR')
+def add_labels_and_legend():
+	plt.xlabel('Frame count')
+	plt.ylabel('EAR (average: ' + format(get_ear_average(2)) + ')')
 	plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
-           ncol=2, mode="expand", borderaxespad=0.)
-
-	# saving the final plot as png
-	plt.savefig(format(args["video"] + ".png"),figsize = (100, 40), bbox_inches = 'tight')
+           borderaxespad=0.)
 
 def result_to_text_file():
 	f = open("eye_blink_results.txt", "a+")
@@ -75,30 +90,22 @@ def result_to_text_file():
 
 	# write result into eye_blink_results.txt
 	f.write(timestamp + " | " + format(args["video"]) + " | number of blinks: " + format(total_blinks) 
-		+ " | ear_average: " + format(get_ear_average()) + "\r\n\r\n")
+		+ " | ear_average: " + format(get_ear_average(2)) + "\r\n\r\n")
 
 def draw_values_on_video():
+
 	# write blink counter on the top left of video
-	cv2.putText(frame, "Blinks: {}".format(total_blinks), (10, 30),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-	# write current EAR on the top right of video
-	cv2.putText(frame, "EAR: {:.2f}".format(ear), (310, 30),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-	# write current treshold on video
-	cv2.putText(frame, "Treshold: {}".format(eye_ar_treshold), (310, 50),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-	# write total frame counter on video
-	cv2.putText(frame, "Frames: {}".format(total_frame_counter), (10, 50),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+	draw_text("Blinks: {}".format(total_blinks), 10, 30, 0.7)
+	draw_text("EAR: {:.2f}".format(ear), 310, 30, 0.7)
+	draw_text("Treshold: {}".format(eye_ar_treshold), 310, 50, 0.5)
+	draw_text("Frames: {}".format(total_frame_counter), 10, 50, 0.5)
 
-def get_ear_average():
-	return ear_total/face_detection_frame_counter
+def draw_text(text, xposition, yposition, text_size):
+	cv2.putText(frame, text, (xposition, yposition),
+		cv2.FONT_HERSHEY_SIMPLEX, text_size, (0, 0, 255), 2)
 
-def add_to_face_detection_plot_array(hasDetectedFace):
-	face_detection_array.append(hasDetectedFace)
-
-def get_face_detection_plot_array():
-	return face_detection_array
+def get_ear_average(digits):
+	return round((ear_total/face_detection_frame_counter), digits)
 
 def get_face_detection_rate():
 	face_detection_rate = (face_detection_frame_counter / total_frame_counter) * 100
@@ -127,10 +134,12 @@ total_blinks = 0
 ear_total = 0
 # distance between ear_average and blink treshold
 ear_treshold_difference = 0.06
+
 # number of frames when face was detected
 face_detection_frame_counter = 0
 # total frames of video
 total_frame_counter = 0
+
 # all the arrays are for plotting
 total_frame_count_array = []
 ear_array = []
@@ -185,8 +194,7 @@ while True:
 		threshold_array.append(0)
 	else:
 		face_detection_array.append(0.5)
-		#add_to_face_detection_plot_array(0.5)
-	#break
+
 	total_frame_counter += 1
 	total_frame_count_array.append(total_frame_counter)
 
@@ -231,7 +239,7 @@ while True:
 			# frames then increment the total number of blinks
 			if consec_frames_counter >= EYE_AR_CONSEC_FRAMES:
 				total_blinks += 1
-				blink_frame_array.append(total_frame_counter - 1)
+				blink_frame_array.append(total_frame_counter)
 				blink_count_ear_array.append(ear)
 			# reset the eye frame consec_frames_counter
 			consec_frames_counter = 0
@@ -240,7 +248,7 @@ while True:
 
 		#update ear_ar_treshold every 10 frames
 		if face_detection_frame_counter % 20 == 0:
-			eye_ar_treshold = get_ear_average() - ear_treshold_difference
+			eye_ar_treshold = get_ear_average(4) - ear_treshold_difference
 
 			#plt.plot(total_frame_count_array, ear_array, color = "blue")
 			#plt.scatter(blink_frame_array, blink_count_ear_array, color = "red", marker = "x")

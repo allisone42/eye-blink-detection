@@ -59,11 +59,11 @@ def add_face_detection_plot():
 
 def add_ear_plot():
 	plt.plot(total_frame_count_array, ear_array, 
-		color = "blue", label = 'EAR', linewidth=1.0)
+		color = "blue", label = 'EAR', alpha=.5, linewidth=1.0)
 
 def add_treshold_plot():
 	plt.plot(total_frame_count_array, threshold_array, 
-		color = 'green', label = 'treshold', linewidth=1.0)
+		color = 'green', label = 'treshold', alpha=.5, linewidth=1.0)
 
 def add_auto_blink_detection_scatter_plot():
 	blinks_label = 'blinks = ' + format(total_blinks)
@@ -77,7 +77,7 @@ def add_manual_blink_detection_scatter_plot():
 		marker = 'o', label = 'blinks manually = ' + format(manual_blink_counter))
 
 def add_labels_and_legend():
-	plt.xlabel('Frame count')
+	plt.xlabel('Frame count (' + format(total_frame_counter) + ', detection rate: ' + format(round(get_face_detection_rate(), 1)) + '%)')
 	plt.ylabel('EAR (average: ' + format(get_ear_average(2)) + ')')
 	plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
            borderaxespad=0.)
@@ -108,7 +108,7 @@ def get_ear_average(digits):
 	return round((ear_total/face_detection_frame_counter), digits)
 
 def get_face_detection_rate():
-	face_detection_rate = (face_detection_frame_counter / total_frame_counter) * 100
+	face_detection_rate = (float(face_detection_frame_counter) / total_frame_counter) * 100
 	return face_detection_rate
 
 def add_blink_on_button_press():
@@ -133,7 +133,7 @@ total_blinks = 0
 
 ear_total = 0
 # distance between ear_average and blink treshold
-ear_treshold_difference = 0.06
+ear_treshold_difference = 0.065
 
 # number of frames when face was detected
 face_detection_frame_counter = 0

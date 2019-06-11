@@ -7,7 +7,7 @@ import numpy as np
 import argparse
 import imutils
 import time
-import datetime.datetime as datetime
+import datetime
 import dlib
 import cv2
 import matplotlib.pyplot as plt
@@ -47,7 +47,8 @@ def create_plot():
     add_labels_and_legend()
 
     # saving the final plot as png
-    plt.savefig(format(args["video"] + ".png"), bbox_inches='tight')
+    plt.savefig(format(args["video"] + '|' + get_current_time_string() +
+                ".png"), bbox_inches='tight')
 
 
 def add_face_detection_plot():
@@ -90,12 +91,18 @@ def add_labels_and_legend():
                borderaxespad=0.)
 
 
+def get_current_time_string():
+    time_format = '%d-%m-%Y_%H:%M:%S'
+    timestamp = datetime.datetime.fromtimestamp(time.time())
+    timestamp = timestamp.strftime(time_format)
+    return timestamp
+
+
 def result_to_text_file():
     f = open("eye_blink_results.txt", "a+")
 
     # add time stamp to result
-    time_format = '%d-%m-%Y %H:%M:%S'
-    timestamp = datetime.fromtimestamp(time.time()).strftime(time_format)
+    timestamp = get_current_time_string()
 
     # write result into eye_blink_results.txt
     f.write(timestamp + " | " + format(args["video"]) +
@@ -121,25 +128,26 @@ def get_ear_average(digits):
     return round((ear_total / face_detection_frame_counter), digits)
 
 
-def get_ear():
+def get_ear(shape):
     leftEye = shape[lStart:lEnd]
     rightEye = shape[rStart:rEnd]
     leftEAR = eye_aspect_ratio(leftEye)
     rightEAR = eye_aspect_ratio(rightEye)
 
-    # average the eye aspect ratio together for both eyes
-    ear = (leftEAR + rightEAR) / 2.0
-
-    # compute the convex hull for the left and right eye, then
-    # visualize each of the eyes
     # draw_eye_contours(leftEye)
     # draw_eye_contours(rightEye)
 
+    # average the eye aspect ratio together for both eyes
+    ear = np.mean([leftEAR, rightEAR])
     return ear
 
 
 def get_current_ear_average():
-    average = ear_array[-20:]
+    if face_detection_frame_counter >= 100:
+        number_of_array_elements = 100
+    else:
+        number_of_array_elements = face_detection_frame_counter
+    average = ear_array[-number_of_array_elements:]
     av = np.mean(average)
     return av
 
@@ -154,6 +162,18 @@ def add_blink_on_button_press():
     manual_blink_detection_array.append(total_frame_counter)
 
 
+def update_ear_treshold():
+    global eye_ar_treshold
+    # eye_ar_treshold = get_ear_average(4) - ear_treshold_difference
+    eye_ar_treshold = get_current_ear_average() - ear_treshold_difference
+
+
+# TODO: calculate to make it more adjustable to different eyes
+# def update_ear_treshold_difference():
+    # global ear_treshold_difference
+    # ear_treshold_difference =
+
+
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-p", "--shape-predictor", required=True,
@@ -164,7 +184,7 @@ args = vars(ap.parse_args())
 
 # treshold for detecting a blink
 eye_ar_treshold = 0.2
-# how many frames under treshold at least before counting a blink
+# how many frames under treshold before counting a blink
 EYE_AR_CONSEC_FRAMES = 2
 
 # consecutive frames under blink treshold and the total number of blinks
@@ -175,9 +195,7 @@ ear_total = 0
 # distance between ear_average and blink treshold
 ear_treshold_difference = 0.06
 
-# number of frames when face was detected
 face_detection_frame_counter = 0
-# total frames of video
 total_frame_counter = 0
 
 # all the arrays are for plotting
@@ -242,27 +260,19 @@ while True:
     # loop over the face detections
     for rect in rects:
         face_detection_frame_counter += 1
-        # determine the facial landmarks for the face region, then
-        # convert the facial landmark (x, y)-coordinates to a NumPy
-        # array
+        # determine the facial landmarks for the face region
         shape = predictor(gray, rect)
         shape = face_utils.shape_to_np(shape)
-
-        # extract the left and right eye coordinates, then use the
-        # coordinates to compute the eye aspect ratio for both eyes
-        ear = get_ear()
+        ear = get_ear(shape)
 
         ear_total += ear
         ear_array.append(ear)
         threshold_array.append(eye_ar_treshold)
 
-        # check to see if the eye aspect ratio is below the blink
-        # threshold, and if so, increment the blink frame consec_frames_counter
+        # if ear is below blink threshold, increment consec_frames_counter
         if ear < eye_ar_treshold:
             consec_frames_counter += 1
 
-        # otherwise, the eye aspect ratio is not below the blink
-        # threshold
         else:
             # if the eyes were closed for a sufficient number of
             # frames then increment the total number of blinks
@@ -270,18 +280,14 @@ while True:
                 total_blinks += 1
                 blink_frame_array.append(total_frame_counter)
                 blink_count_ear_array.append(ear)
-            # reset the eye frame consec_frames_counter
+            # reset the consec_frames_counter
             consec_frames_counter = 0
 
         draw_values_on_video()
 
         # update ear_ar_treshold every 10 frames
         if face_detection_frame_counter % 20 == 0:
-            eye_ar_treshold = get_ear_average(4) - ear_treshold_difference
-            # plt.plot(total_frame_count_array, ear_array, color = "blue")
-            # plt.scatter(blink_frame_array, blink_count_ear_array,
-            #             color = "red", marker = "x")
-            # plt.pause(0.00001)
+            update_ear_treshold()
 
     # show the frame
     cv2.imshow("Frame", frame)
@@ -295,6 +301,7 @@ while True:
 
     # if the `q` key was pressed, break from the loop
     if key == ord("q"):
+        create_plot()
         break
 
 # do a bit of cleanup

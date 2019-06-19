@@ -37,7 +37,7 @@ def draw_eye_contours(eye):
 
 def create_plot():
     # set size of resulting graphic
-    plt.figure(figsize=(20, 5))
+    plt.figure(figsize=(40, 5))
 
     # add_face_detection_plot()
     add_ear_plot()
@@ -46,9 +46,7 @@ def create_plot():
     add_manual_blink_detection_scatter_plot()
     add_labels_and_legend()
 
-    # saving the final plot as png
-    plt.savefig(format(args["video"] + '|' + get_current_time_string() +
-                ".png"), bbox_inches='tight')
+    save_plot_as_png()
 
 
 def add_face_detection_plot():
@@ -78,7 +76,7 @@ def add_manual_blink_detection_scatter_plot():
     manual_blink_counter = len(manual_blink_detection_array)
     manual_blink_counter_array = np.zeros(manual_blink_counter)
     plt.scatter(manual_blink_detection_array, manual_blink_counter_array,
-                color='orange', marker='o', label='blinks manually = ' +
+                color='orange', marker='|', label='blinks manually = ' +
                 format(manual_blink_counter))
 
 
@@ -89,6 +87,11 @@ def add_labels_and_legend():
     plt.ylabel('EAR (average: ' + format(get_ear_average(2)) + ')')
     plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
                borderaxespad=0.)
+
+
+def save_plot_as_png():
+    plt.savefig(format(args["video"] + '|' + get_current_time_string() +
+                ".png"), bbox_inches='tight')
 
 
 def get_current_time_string():
@@ -117,6 +120,10 @@ def draw_values_on_video():
     draw_text("EAR: {:.2f}".format(ear), 310, 30, 0.7)
     draw_text("Treshold: {}".format(eye_ar_treshold), 310, 50, 0.5)
     draw_text("Frames: {}".format(total_frame_counter), 10, 50, 0.5)
+    manual_blink_counter = len(manual_blink_detection_array)
+    if manual_blink_counter > 0:
+        draw_text("Manual blink counter: {}".format(manual_blink_counter),
+                  10, 65, 0.5)
 
 
 def draw_text(text, xposition, yposition, text_size):
@@ -290,7 +297,7 @@ while True:
             update_ear_treshold()
 
     # show the frame
-    cv2.imshow("Frame", frame)
+    cv2.imshow(format(args["video"]), frame)
     key = cv2.waitKey(1) & 0xFF
 
     if key == ord("b"):
@@ -304,6 +311,5 @@ while True:
         create_plot()
         break
 
-# do a bit of cleanup
 cv2.destroyAllWindows()
 video_stream.stop()
